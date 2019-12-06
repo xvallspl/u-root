@@ -5,6 +5,7 @@
 package vmtest
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -210,69 +211,14 @@ func QEMU(o *Options) (*qemu.Options, error) {
 	}
 
 	// Create initramfs if caller did not provide one.
-	if len(o.QEMUOpts.Initramfs) == 0 {
-		if !o.DontSetEnv {
-			env := golang.Default()
-			env.CgoEnabled = false
-			env.GOARCH = TestArch()
-			o.BuildOpts.Env = env
-		}
-
-		cmds := []string{
-			"github.com/u-root/u-root/cmds/core/init",
-			"github.com/u-root/u-root/cmds/core/elvish",
-		}
-		if len(o.BuildOpts.Commands) == 0 {
-			cmds = append(cmds, "github.com/u-root/u-root/cmds/*")
-		}
-
-		// If a custom uinit was not provided, use the generic test uinit. This will
-		// try to find and run the test commands shell script.
-		if len(o.Uinit) == 0 {
-			o.Uinit = "github.com/u-root/u-root/integration/testcmd/generic/uinit"
-		}
-		cmds = append(cmds, o.Uinit)
-
-		// Add our commands to the build opts.
-		o.BuildOpts.AddBusyBoxCommands(cmds...)
-
-		if o.BuildOpts.BaseArchive == nil {
-			o.BuildOpts.BaseArchive = uroot.DefaultRamfs.Reader()
-		}
-		if len(o.BuildOpts.InitCmd) == 0 {
-			o.BuildOpts.InitCmd = "init"
-		}
-		if len(o.BuildOpts.DefaultShell) == 0 {
-			o.BuildOpts.DefaultShell = "elvish"
-		}
-		if len(o.BuildOpts.TempDir) == 0 {
-			o.BuildOpts.TempDir = o.TmpDir
-		}
-
-		if o.Logger == nil {
-			o.Logger = log.New(os.Stderr, "", 0)
-		}
-
-		// Set OutputFile so that the initramfs is written to o.TmpDir.
-		// TODO(plaud) what if its non-empty, QEMUOpts initramfs would be ""?
-		var outputFile string
-		if o.BuildOpts.OutputFile == nil {
-			outputFile = filepath.Join(o.TmpDir, "initramfs.cpio")
-			w, err := initramfs.CPIO.OpenWriter(o.Logger, outputFile, "", "")
-			if err != nil {
-				return nil, err
-			}
-			o.BuildOpts.OutputFile = w
-		}
-
-		// Finally, create an initramfs!
-		if err := uroot.CreateInitramfs(o.Logger, o.BuildOpts); err != nil {
+	initramfs := os.Getenv("UROOT_INITRAMFS")
+	if len(initramfs) == 0 {
+		initramfs = filepath.Join(o.TmpDir, "initramfs.cpio")
+		if err := CreateTestInitramfs(o.BuildOpts, o.Uinit, initramfs); err != nil {
 			return nil, err
 		}
-
-		o.QEMUOpts.Initramfs = outputFile
-
 	}
+	o.QEMUOpts.Initramfs = initramfs
 
 	if len(o.QEMUOpts.Kernel) == 0 {
 		// Copy kernel to o.TmpDir for tests involving kexec.
@@ -299,4 +245,70 @@ func QEMU(o *Options) (*qemu.Options, error) {
 	o.QEMUOpts.Devices = append(o.QEMUOpts.Devices, qemu.VirtioRandom{}, dir)
 
 	return &o.QEMUOpts, nil
+}
+
+// CreateTestInitramfs creates an initramfs with the given build options and
+// uinit, and writes it to the given output file.
+func CreateTestInitramfs(o uroot.Opts, uinit, outputFile string) error {
+	// TODO need to bring back the DontSetEnv check?
+	env := golang.Default()
+	env.CgoEnabled = false
+	env.GOARCH = TestArch()
+	o.Env = env
+
+	logger := log.New(os.Stderr, "", 0)
+
+	// If build opts don't specify any commands, include all core commands. Else,
+	// always add init and elvish.
+	var cmds []string
+	if len(o.Commands) == 0 {
+		cmds = []string{"github.com/u-root/u-root/cmds/core/*"}
+	} else {
+		cmds = []string{
+			"github.com/u-root/u-root/cmds/core/init",
+			"github.com/u-root/u-root/cmds/core/elvish",
+		}
+	}
+
+	// If a custom uinit was not provided, use the generic test uinit. This will
+	// try to find and run the test commands shell script.
+	if len(uinit) == 0 {
+		uinit = "github.com/u-root/u-root/integration/testcmd/generic/uinit"
+	}
+	cmds = append(cmds, uinit)
+
+	// Add our commands to the build opts.
+	o.AddBusyBoxCommands(cmds...)
+
+	// Fill in the default build options if not specified.
+	if o.BaseArchive == nil {
+		o.BaseArchive = uroot.DefaultRamfs.Reader()
+	}
+	if len(o.InitCmd) == 0 {
+		o.InitCmd = "init"
+	}
+	if len(o.DefaultShell) == 0 {
+		o.DefaultShell = "elvish"
+	}
+	if len(o.TempDir) == 0 {
+		tempDir, err := ioutil.TempDir("", "initramfs-tempdir")
+		if err != nil {
+			return fmt.Errorf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+		o.TempDir = tempDir
+	}
+
+	if o.OutputFile == nil {
+		if len(outputFile) == 0 {
+			return fmt.Errorf("No output file provided.")
+		}
+		w, err := initramfs.CPIO.OpenWriter(logger, outputFile, "", "")
+		if err != nil {
+			return fmt.Errorf("Failed to create initramfs writer: %v", err)
+		}
+		o.OutputFile = w
+	}
+
+	return uroot.CreateInitramfs(logger, o)
 }

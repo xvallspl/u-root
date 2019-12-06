@@ -15,7 +15,7 @@ import (
 	"github.com/u-root/u-root/pkg/vmtest"
 )
 
-func TestDhclient(t *testing.T) {
+func RunTestDhclient(t *testing.T) {
 	// TODO: support arm
 	if vmtest.TestArch() != "amd64" {
 		t.Skipf("test not supported on %s", vmtest.TestArch())
@@ -85,7 +85,7 @@ func TestDhclient(t *testing.T) {
 // TestPxeboot runs a server and client to test pxebooting a node.
 // TODO: FIX THIS TEST!
 // Change the t.Logf below back to t.Errorf
-func TestPxeboot(t *testing.T) {
+func RunTestPxeboot(t *testing.T) {
 	// TODO: support arm
 	if vmtest.TestArch() != "amd64" {
 		t.Skipf("test not supported on %s", vmtest.TestArch())
@@ -158,7 +158,7 @@ func TestPxeboot(t *testing.T) {
 	}
 }
 
-func TestQEMUDHCPTimesOut(t *testing.T) {
+func RunTestQEMUDHCPTimesOut(t *testing.T) {
 	// TODO: support arm
 	if vmtest.TestArch() != "amd64" {
 		t.Skipf("test not supported on %s", vmtest.TestArch())

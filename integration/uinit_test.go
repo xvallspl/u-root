@@ -14,7 +14,7 @@ import (
 )
 
 // TestHelloWorld runs an init which prints the string "HELLO WORLD" and exits.
-func TestHelloWorld(t *testing.T) {
+func RunTestHelloWorld(t *testing.T) {
 	q, cleanup := vmtest.QEMUTest(t, &vmtest.Options{
 		Uinit: "github.com/u-root/u-root/integration/testcmd/helloworld/uinit",
 	})
@@ -26,7 +26,7 @@ func TestHelloWorld(t *testing.T) {
 }
 
 // TestHelloWorldNegative runs an init which does not print the string "HELLO WORLD".
-func TestHelloWorldNegative(t *testing.T) {
+func RunTestHelloWorldNegative(t *testing.T) {
 	q, cleanup := vmtest.QEMUTest(t, &vmtest.Options{
 		Uinit: "github.com/u-root/u-root/integration/testcmd/helloworld/uinit",
 	})
@@ -37,7 +37,7 @@ func TestHelloWorldNegative(t *testing.T) {
 	}
 }
 
-func TestScript(t *testing.T) {
+func RunTestScript(t *testing.T) {
 	q, cleanup := vmtest.QEMUTest(t, &vmtest.Options{
 		Name: "ShellScript",
 		BuildOpts: uroot.Opts{
