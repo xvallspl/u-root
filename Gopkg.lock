@@ -26,6 +26,18 @@
   version = "v0.2.0"
 
 [[projects]]
+  digest = "1:90f59f03e8a0c973faff6d6122a4000efaee118907b5c695cc7615d2d8240538"
+  name = "github.com/boombuler/barcode"
+  packages = [
+    ".",
+    "qr",
+    "utils",
+  ]
+  pruneopts = "NUT"
+  revision = "3cfea5ab600ae37946be2b763b8ec2c1cf2d272d"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:e02ffb382584a22c006311c9a9c39df1f2d65e2114e67dd2486f43924f141f0a"
   name = "github.com/cenkalti/backoff"
   packages = ["."]
@@ -58,12 +70,28 @@
   revision = "390a4f403a8e94ca0acdcf609eb18eeae9d6d1ac"
 
 [[projects]]
+  digest = "1:4c6020db342c823428a2bdf39c50d2ff1de2bc74c722eb55cff5dee459e6d6c5"
+  name = "github.com/disintegration/imaging"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "acabd8315e63bfcaac97d52d68a7a0b88d2eea93"
+  version = "v1.6.2"
+
+[[projects]]
   digest = "1:b7ffca49e9cfd3dfb04a8e0a59347708c6f78f68476a32c5e0a0edca5d1b258c"
   name = "github.com/dustin/go-humanize"
   packages = ["."]
   pruneopts = "NUT"
   revision = "9f541cc9db5d55bce703bd99987c9d5cb8eea45e"
   version = "v1.0.0"
+
+[[projects]]
+  digest = "1:85f32b7ea46a962ccdeead5612f2c75be623133d78225b40f81b207478bb4a46"
+  name = "github.com/eliukblau/pixterm"
+  packages = ["pkg/ansimage"]
+  pruneopts = "NUT"
+  revision = "80d60b29ba1c381489f27c6c718c5693bd5a3223"
+  version = "v1.3.1"
 
 [[projects]]
   digest = "1:e8301df5b11c8c13927a26a88ee7ec65410024f75c0fc3c8e6421aa6833808ac"
@@ -187,6 +215,14 @@
   version = "v1.1.8"
 
 [[projects]]
+  digest = "1:46cd411094ae22c75cfd0e99a9865906006f97267686df2162b62067acbfd4d5"
+  name = "github.com/lucasb-eyer/go-colorful"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "fadcb7c7fa1e47844a23f5ebea95219172166a56"
+  version = "v1.0.3"
+
+[[projects]]
   digest = "1:046ef248b5b3f2a9f547e93a9d18d319b2a906b92720a037452a888d48818e2d"
   name = "github.com/mattn/go-isatty"
   packages = ["."]
@@ -246,6 +282,18 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:7925d130987f891210796f4318d661db7e7b3f26c314f3deec1fe346799afa7b"
+  name = "github.com/pquerna/otp"
+  packages = [
+    ".",
+    "hotp",
+    "totp",
+  ]
+  pruneopts = "NUT"
+  revision = "43bebefda392017900e7a7b237b4c914c6a55b50"
+  version = "v1.2.0"
+
+[[projects]]
   branch = "master"
   digest = "1:546bfb3441e8385de822b70fdd3d43ea829ab8a9b1d2aaaf0b61f65a99b43531"
   name = "github.com/rck/unit"
@@ -290,6 +338,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:50ce9b95a0a92275b8d9d38a2977394b9d27ef67a375b1ba0ca1d2f1603ab893"
+  name = "github.com/u-root/tpmtotp"
+  packages = ["pkg/token"]
+  pruneopts = "NUT"
+  revision = "f7a70d4b009be3953e5ac3c71d6e3fd9ef1a3309"
+
+[[projects]]
+  branch = "master"
   digest = "1:59fa137070a9f7c3d617aae2def67e03c98cf2ec1b5eb52456c01aa7e616b63a"
   name = "github.com/vishvananda/netlink"
   packages = [
@@ -309,7 +365,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:543c2537a16e236963b02b57b7b16686bee80cdb3f47e5cfa288ea92a89b59d9"
+  digest = "1:9a3c902e14430e3a6ab2a441e4677ecde618b5774f87b6b0ed32568911ebf95b"
   name = "golang.org/x/crypto"
   packages = [
     "cast5",
@@ -329,9 +385,27 @@
     "ripemd160",
     "sha3",
     "ssh",
+    "ssh/terminal",
   ]
   pruneopts = "NUT"
   revision = "53104e6ec876ad4e22ad27cce588b01392043c1b"
+
+[[projects]]
+  branch = "master"
+  digest = "1:40dd9716ce3b1aa196457870d5b3c6fae070ef08dc577ce4655a7048580d22bc"
+  name = "golang.org/x/image"
+  packages = [
+    "bmp",
+    "ccitt",
+    "riff",
+    "tiff",
+    "tiff/lzw",
+    "vp8",
+    "vp8l",
+    "webp",
+  ]
+  pruneopts = "NUT"
+  revision = "9130b4cfad522142c86367afe5e34ce811a85a4b"
 
 [[projects]]
   branch = "master"
@@ -457,6 +531,7 @@
     "github.com/spf13/pflag",
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
+    "github.com/u-root/tpmtotp/pkg/token",
     "github.com/vishvananda/netlink",
     "golang.org/x/crypto/ed25519",
     "golang.org/x/crypto/md4",

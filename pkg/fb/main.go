@@ -5,6 +5,7 @@
 package fb
 
 import (
+  "fmt"
   "image"
   "io/ioutil"
 )
@@ -13,11 +14,14 @@ const width = 640
 const height = 480
 const bpp = 3
 
-func DrawImageAt(img image.Image, posx int, posy int) {
-  var buf []byte
-  buf = make([]byte, width*height*bpp)
+func DrawImageAt(img image.Image, posx int, posy int) (error) {
+  buf := make([]byte, width*height*bpp)
   DrawOnBufAt(buf, img, posx, posy, width, bpp)
-  ioutil.WriteFile("/dev/fb0", buf, 0600)
+  err := ioutil.WriteFile("/dev/fb0", buf, 0600)
+  if (err != nil) {
+    return fmt.Errorf("Error writing to framebuffer: %v", err)
+  }
+  return nil
 }
 
 func DrawOnBufAt(
@@ -70,13 +74,29 @@ func DrawScaledOnBufAt(
   }
 }
 
-func DrawScaledImageAt(img image.Image, posx int, posy int, factor int) {
-  var buf []byte
-  buf = make([]byte, width*height*bpp)
-  DrawScaledOnBufAt(buf, img, posx, posy, factor, width, bpp)
-  size := 3
-  for digit := 0; digit < 9; digit++ {
+func DrawDigits(posx int, posy int, size int) (error) {
+  buf := make([]byte, width*height*bpp)
+  for digit := 0; digit <= 9; digit++ {
     DrawDigitAt(buf, digit, 205 + digit*15, 130, width, bpp, size)
   }
-  ioutil.WriteFile("/dev/fb0", buf, 0600)
+  err := ioutil.WriteFile("/dev/fb0", buf, 0600)
+  if (err != nil) {
+    return fmt.Errorf("Error writing to framebuffer: %v", err)
+  }
+  return nil
+}
+
+func DrawScaledImageAt(img image.Image, posx int, posy int, factor int) (error) {
+  buf := make([]byte, width*height*bpp)
+  DrawScaledOnBufAt(buf, img, posx, posy, factor, width, bpp)
+  size := 3
+  digits := []int {4,7,1,1}
+  for i, digit := range digits {
+    DrawDigitAt(buf, digit, posx + i*15, posy-40, width, bpp, size)
+  }
+  err := ioutil.WriteFile("/dev/fb0", buf, 0600)
+  if (err != nil) {
+    return fmt.Errorf("Error writing to framebuffer: %v", err)
+  }
+  return nil
 }
