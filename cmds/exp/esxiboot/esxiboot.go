@@ -41,7 +41,7 @@ import (
 var (
 	cfg     = flag.StringP("config", "c", "", "ESXi config file")
 	cdrom   = flag.StringP("cdrom", "r", "", "ESXi CDROM boot device")
-	diskDev = flag.StringP("device", "d", "", "ESXi disk boot device")
+	diskDev = flag.StringP("device", "d", "/dev/sda", "ESXi disk boot device")
 	dryRun  = flag.Bool("dry-run", false, "dry run (just mount + load the kernel, don't kexec)")
 )
 

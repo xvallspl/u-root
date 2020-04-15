@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"debug/elf"
 	"encoding/binary"
+	//"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -54,17 +55,11 @@ type multiboot struct {
 	// https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Machine-state.
 	trampoline string
 
-	header header
-
-	// infoAddr is a pointer to multiboot info.
-	infoAddr uintptr
-	// kernelEntry is a pointer to entry point of kernel.
-	kernelEntry uintptr
 	// EntryPoint is a pointer to trampoline.
 	entryPoint uintptr
 
 	info          info
-	loadedModules []module
+	loadedModules modules
 }
 
 var (
@@ -98,6 +93,28 @@ func (m MemoryMap) String() string {
 
 type memoryMaps []MemoryMap
 
+// marshal writes out the exact bytes expected by the multiboot info header
+// specified in
+// https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Boot-information-format.
+func (m memoryMaps) marshal() ([]byte, error) {
+	buf := bytes.Buffer{}
+	err := binary.Write(&buf, ubinary.NativeEndian, m)
+	return buf.Bytes(), err
+}
+
+// elems returns the info elements expected in the mutiboot info header.
+func (m memoryMaps) elems() []elem {
+	var e []elem
+	for _, mm := range m {
+		e = append(e, &mutibootMemRange{
+			startAddr: mm.BaseAddr,
+			length:    mm.Length,
+			memType:   mm.Type,
+		})
+	}
+	return e
+}
+
 // String returns a new-line-separated representation of the entire memory map.
 func (m memoryMaps) String() string {
 	var s []string
@@ -107,10 +124,13 @@ func (m memoryMaps) String() string {
 	return strings.Join(s, "\n")
 }
 
-// Probe checks if `kernel` is multiboot v1 kernel.
+// Probe checks if `kernel` is multiboot v1 or mutiboot kernel.
 func Probe(kernel io.ReaderAt) error {
 	r := tryGzipFilter(kernel)
 	_, err := parseHeader(uio.Reader(r))
+	if err == ErrHeaderNotFound {
+		_, err = parseMutiHeader(uio.Reader(r))
+	}
 	return err
 }
 
@@ -219,15 +239,26 @@ func (m Modules) Close() error {
 func (m *multiboot) load(debug bool, ibft *ibft.IBFT) error {
 	var err error
 	log.Println("Parsing multiboot header")
-	if m.header, err = parseHeader(uio.Reader(m.kernel)); err != nil {
+	// TODO: the kernel is opened like 4 separate times here. Just open it
+	// once and pass it around.
+
+	//var multibootHeader *header
+	multibootHeader, err := parseHeader(uio.Reader(m.kernel))
+	if err == ErrHeaderNotFound {
+		// We don't even need the header at the moment. Just need to
+		// know it's there. Everything that matters is in the ELF.
+		_, err = parseMutiHeader(uio.Reader(m.kernel))
+	}
+	if err != nil {
 		return fmt.Errorf("error parsing headers: %v", err)
 	}
 
 	log.Printf("Getting kernel entry point")
-	if m.kernelEntry, err = getEntryPoint(m.kernel); err != nil {
+	kernelEntry, err := getEntryPoint(m.kernel)
+	if err != nil {
 		return fmt.Errorf("error getting kernel entry point: %v", err)
 	}
-	log.Printf("Kernel entry point at %#x", m.kernelEntry)
+	log.Printf("Kernel entry point at %#x", kernelEntry)
 
 	log.Printf("Parsing ELF segments")
 	if err := m.mem.LoadElfSegments(m.kernel); err != nil {
@@ -259,12 +290,25 @@ func (m *multiboot) load(debug bool, ibft *ibft.IBFT) error {
 	}
 
 	log.Printf("Preparing multiboot info")
-	if m.infoAddr, err = m.addInfo(); err != nil {
+	var infoAddr uintptr
+	if multibootHeader != nil {
+		infoAddr, err = m.addMultibootInfo(multibootHeader)
+	} else {
+		infoAddr, err = m.addMutibootInfo()
+	}
+	if err != nil {
 		return fmt.Errorf("error preparing multiboot info: %v", err)
 	}
 
+	var magic uintptr
+	if multibootHeader != nil {
+		magic = bootMagic
+	} else {
+		magic = mutibootMagic
+	}
+
 	log.Printf("Adding trampoline")
-	if m.entryPoint, err = m.addTrampoline(); err != nil {
+	if m.entryPoint, err = m.addTrampoline(magic, infoAddr, kernelEntry); err != nil {
 		return fmt.Errorf("error adding trampoline: %v", err)
 	}
 	log.Printf("Trampoline entry point at %#x", m.entryPoint)
@@ -288,8 +332,8 @@ func getEntryPoint(r io.ReaderAt) (uintptr, error) {
 	return uintptr(f.Entry), err
 }
 
-func (m *multiboot) addInfo() (addr uintptr, err error) {
-	iw, err := m.newMultibootInfo()
+func (m *multiboot) addMultibootInfo(h *header) (addr uintptr, err error) {
+	iw, err := m.newMultibootInfo(h)
 	if err != nil {
 		return 0, err
 	}
@@ -313,6 +357,47 @@ func (m *multiboot) addInfo() (addr uintptr, err error) {
 	return r.Start, nil
 }
 
+func (m *multiboot) addMutibootInfo() (addr uintptr, err error) {
+	var mi mutibootInfo
+
+	mi.elems = append(mi.elems, m.memoryMap().elems()...)
+	mods, err := m.loadModules()
+	if err != nil {
+		return 0, err
+	}
+	mi.elems = append(mi.elems, mods.elems()...)
+
+	/*pretty, err := json.MarshalIndent(mi.elems, "", "    ")
+	if err != nil {
+		log.Fatal("Failed to generate json", err)
+	}*/
+	log.Printf("multiboot elems: %d", len(mi.elems))
+
+	// This marshals the mutiboot info with cmdline = 0. We're gonna append
+	// the cmdline, so we must know the size of the marshaled stuff first
+	// to be able to point to it.
+	//
+	// TODO: find a better place to put the cmdline so we don't do this
+	// bullshit.
+	b := mi.marshal()
+
+	// string + null-terminator
+	cmdlineLen := len(m.cmdLine) + 1
+
+	memRange, err := m.mem.FindSpace(uint(len(b) + cmdlineLen))
+	if err != nil {
+		return 0, err
+	}
+	mi.cmdline = uint64(memRange.Start + uintptr(len(b)))
+
+	// Re-marshal, now that the cmdline is set.
+	b = mi.marshal()
+	b = append(b, []byte(m.cmdLine)...)
+	b = append(b, 0)
+	m.mem.Segments.Insert(kexec.NewSegment(b, memRange))
+	return memRange.Start, nil
+}
+
 func (m multiboot) memoryMap() memoryMaps {
 	var ret memoryMaps
 	for _, r := range m.mem.Phys {
@@ -329,6 +414,7 @@ func (m multiboot) memoryMap() memoryMaps {
 		}
 		ret = append(ret, v)
 	}
+	log.Printf("memory map: %v", ret)
 	return ret
 }
 
@@ -375,13 +461,13 @@ func min(a, b uint32) uint32 {
 	return b
 }
 
-func (m *multiboot) newMultibootInfo() (*infoWrapper, error) {
+func (m *multiboot) newMultibootInfo(header *header) (*infoWrapper, error) {
 	mmapAddr, mmapSize, err := m.addMmap()
 	if err != nil {
 		return nil, err
 	}
 	var inf info
-	if m.header.Flags&flagHeaderMemoryInfo != 0 {
+	if header.Flags&flagHeaderMemoryInfo != 0 {
 		lower, upper := m.memoryBoundaries()
 		inf = info{
 			Flags:      flagInfoMemMap | flagInfoMemory,
@@ -393,7 +479,7 @@ func (m *multiboot) newMultibootInfo() (*infoWrapper, error) {
 	}
 
 	if len(m.modules) > 0 {
-		modAddr, err := m.addModules()
+		modAddr, err := m.addMultibootModules()
 		if err != nil {
 			return nil, err
 		}
@@ -402,9 +488,6 @@ func (m *multiboot) newMultibootInfo() (*infoWrapper, error) {
 		inf.ModsCount = uint32(len(m.modules))
 	}
 
-	inf.CmdLine = sizeofInfo
-	inf.BootLoaderName = sizeofInfo + uint32(len(m.cmdLine)) + 1
-	inf.Flags |= flagInfoCmdLine | flagInfoBootLoaderName
 	return &infoWrapper{
 		info:           inf,
 		CmdLine:        m.cmdLine,
@@ -412,19 +495,10 @@ func (m *multiboot) newMultibootInfo() (*infoWrapper, error) {
 	}, nil
 }
 
-// marshal writes out the exact bytes expected by the multiboot info header
-// specified in
-// https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Boot-information-format.
-func (m memoryMaps) marshal() ([]byte, error) {
-	buf := bytes.Buffer{}
-	err := binary.Write(&buf, ubinary.NativeEndian, m)
-	return buf.Bytes(), err
-}
-
-func (m *multiboot) addTrampoline() (entry uintptr, err error) {
+func (m *multiboot) addTrampoline(magic, infoAddr, kernelEntry uintptr) (entry uintptr, err error) {
 	// Trampoline setups the machine registers to desired state
 	// and executes the loaded kernel.
-	d, err := trampoline.Setup(m.trampoline, m.infoAddr, m.kernelEntry)
+	d, err := trampoline.Setup(m.trampoline, magic, infoAddr, kernelEntry)
 	if err != nil {
 		return 0, err
 	}
